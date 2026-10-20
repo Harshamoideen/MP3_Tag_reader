@@ -1,14 +1,26 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "mp3.h"
 
+/*
+ * Function: edit_mp3
+ * Description: Edits a selected ID3 metadata tag in an MP3 file.
+ *              Copies unchanged frames, replaces the selected frame,
+ *              updates the ID3 tag size, and replaces the original file.
+ *
+ * Arguments:
+ *   song - Pointer to the MP3Tag structure.
+ *   argv - Command-line arguments containing the filename and tag option.
+ *
+ * Return: void
+ */
 
 void edit_mp3(MP3Tag *song,char* argv[])
 {
 	char file_name[200];
 	strcpy(file_name , argv[1]);
+    /*Open the original MP3 file in binary read mode*/
 	FILE *f2 = fopen(file_name,"rb");
 	if(f2 == NULL) 
 	{
@@ -22,7 +34,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		fclose(f2);
 		return;
 	}
-	//copying header to dulplicate file
+	/*Read and validate the 10-byte ID3 header*/
 	char header[10];
 	fseek(f1 ,0 ,SEEK_SET);
 	fseek(f2 ,0 ,SEEK_SET);
@@ -35,6 +47,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		remove("duplicate.mp3");
 		return;
 	}
+    /*Extract the existing ID3 tag size from the header*/
 	unsigned int old_tag_size =  ((unsigned int)(header[6] & 0x7F) << 21) |
 		((unsigned int)(header[7] & 0x7F) << 14) |
 		((unsigned int)(header[8] & 0x7F) << 7) |
@@ -53,11 +66,13 @@ void edit_mp3(MP3Tag *song,char* argv[])
 	char data[4096];
 	//comparing cla commad 3(tag) to ask permission
 	char select;
+    /*Select the metadata tag based on the command-line option*/ 
 	if(strcmp(argv[3],"-y") == 0)
 	{
 		strcpy(given_tag,"TYER");
 		printf("Do you want to change the year? (y/n)\n");
 		scanf(" %c",&select);
+        while(getchar() != '\n');
 		if(select == 'y')
 			printf("Enter new year: ");  
 		else if(select == 'n')
@@ -79,6 +94,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		strcpy(given_tag,"TIT2");
 		printf("Do you want to change the title of the song? (y/n)\n");
 		scanf(" %c",&select);
+        while(getchar() != '\n');
 		if(select == 'y')
 			printf("Enter new title: ");
 		else if(select == 'n')
@@ -100,6 +116,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		strcpy(given_tag,"TPE1");
 		printf("Do you want to change the artist name? (y/n)\n");
 		scanf(" %c",&select);
+        while(getchar() != '\n');
 		if(select == 'y')
 			printf("Ente new artist: ");
 		else if(select == 'n') 
@@ -120,6 +137,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		strcpy(given_tag,"TALB");
 		printf("Do you want to change the Album name? (y/n)\n");
 		scanf(" %c",&select);
+        while(getchar() != '\n');
 		if(select == 'y')
 			printf("Enter new album: ");
 		else if(select == 'n')
@@ -141,6 +159,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		strcpy(given_tag,"TCON");
 		printf("Do you want to change the Genre? (y/n)\n");
 		scanf(" %c",&select);
+        while(getchar() != '\n');
 		if(select == 'y')
 			printf("Enter new genre: ");
 		else if(select == 'n')
@@ -163,6 +182,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		strcpy(given_tag,"COMM");
 		printf("Do you want to change the Comment? (y/n)\n");
 		scanf(" %c",&select);
+        while(getchar() != '\n');
 		if(select == 'y')
 			printf("Enter new comment: ");
 		else if(select == 'n')
@@ -181,6 +201,9 @@ void edit_mp3(MP3Tag *song,char* argv[])
 	}
 	else{
 		printf("\nEnter valid tag\n\n");
+        fclose(f1);
+        fclose(f2);
+        remove("duplicate.mp3");
 		return;
 	}
 	//reading new data 
@@ -193,22 +216,58 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		return;
 	}
 	new_size = strlen(new_data) + 1;
+    /* Validate that the year is numeric and less than 2026 */
+   /* Validate the year only when the selected tag is TYER */
+/* Validate the year only when the selected tag is TYER */
+if (strcmp(given_tag, "TYER") == 0)
+{
+    if (strlen(new_data) != 4)
+    {
+        printf("Error: Year must contain exactly 4 digits.\n");
+        fclose(f1);
+        fclose(f2);
+        remove("duplicate.mp3");
+        return;
+    }
+
+    for (int i = 0; i < 4; i++)
+    {
+        if (new_data[i] < '0' || new_data[i] > '9')
+        {
+            printf("Error: Year must contain only digits.\n");
+            fclose(f1);
+            fclose(f2);
+            remove("duplicate.mp3");
+            return;
+        }
+    }
+
+    if (atoi(new_data) >= 2027)
+    {
+        printf("Error: Year must be less than 2027.\n");
+        fclose(f1);
+        fclose(f2);
+        remove("duplicate.mp3");
+        return;
+    }
+}
 
 
 	unsigned char size_bytes[4];
 	unsigned char new_size_bytes[4];
 	int size;
 	//little endian to big endian
-	//reading new size
+	/*Convert the new frame size into big-endian byte order*/
 	new_size_bytes[0] = (new_size >> 24) & 0xFF;
 	new_size_bytes[1] = (new_size >> 16) & 0xFF;
 	new_size_bytes[2] = (new_size >> 8) & 0xFF;
 	new_size_bytes[3] = new_size & 0xFF;
-	//read tag
+
+	/*Read ID3 frames one by one from the original MP3 file*/
 	while(fread(tag,1,4,f2) == 4)
 	{
 		tag[4] = '\0';
-		//read size of the tag
+		/*Read and decode the current frame s*/
 		if(fread(size_bytes, 1, 4, f2) != 4) 
 		{
 			printf("Frame size read failed!\n");
@@ -224,7 +283,8 @@ void edit_mp3(MP3Tag *song,char* argv[])
 			((unsigned int)size_bytes[1] << 16) |
 			((unsigned int)size_bytes[2] << 8) |
 			(unsigned int)size_bytes[3];
-		//reaf flag 2bytes and 1 encoding
+
+		/* Read the two frame flag bytes*/
 		if(fread(flag,1,2,f2) != 2)
 		{
 			printf("Frame read failed!\n");
@@ -243,6 +303,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 			return;
 		}
 
+        /*Compare the current frame ID with the requested metadata tag*/
 		if (strcmp(tag, given_tag) != 0)
 		{
 			// Copy frame header
@@ -256,12 +317,13 @@ void edit_mp3(MP3Tag *song,char* argv[])
 				return;
 			}
 
-			// Copy frame data in chunks
+			/*Copy unchanged frame headers and data to the temporary file*/
 			unsigned char buffer[4096];
 			unsigned int remaining = size;
 
 			while (remaining > 0)
 			{
+                /*Check whether the selected frame fits within the data buffer*/
 				size_t chunk = remaining > sizeof(buffer)
 					? sizeof(buffer) : remaining;
 
@@ -329,7 +391,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		}
 
 	}
-	//rest of the file
+	/* Check whether the requested metadata frame was found */
 	if (!found)
 	{
 		printf("Requested tag not found!\n");
@@ -338,6 +400,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		remove("duplicate.mp3");
 		return;
 	}
+    /* Copy the remaining file data, including the audio content */
 	int current=ftell(f2);
 	fseek(f2,0,SEEK_END);
 	int end = ftell(f2);
@@ -348,6 +411,8 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		fread(&ch,1,1,f2);
 		fwrite(&ch,1,1,f1);
 	}
+
+    /* Update the ID3 header with the new tag size */
 	unsigned int total_size = old_tag_size + size_difference;
 
 	header[6] = (total_size >> 21) & 0x7F;
@@ -373,7 +438,7 @@ void edit_mp3(MP3Tag *song,char* argv[])
 		remove("duplicate.mp3");
 		return;
 	}
-	//removing and renaming
+	/* Replace the original MP3 file with the modified temporary file */
 	if (fclose(f1) != 0)
 	{
 		fclose(f2);
